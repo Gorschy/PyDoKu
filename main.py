@@ -6,7 +6,7 @@ from kivy.uix.label import Label
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.clock import Clock
-import random, math, threading
+import random, math, threading, time
 kivy.require('1.11.1')
 
 
@@ -137,31 +137,31 @@ class Sudoku:
     def solve(self, callback=None):
         self.solve_sudoku(0, 0, callback)
 
-    def solve_sudoku(self, i, j, callback=None):
-        if i == self.N - 1 and j == self.N:
-            return True
+    def solve_sudoku(self, i=0, j=0, callback=None):
+        if i == 9:
+            i = 0
+            j += 1
+            if j == 9:
+                return True
 
-        if j == self.N:
-            i += 1
-            j = 0
+        if self.mat[i][j] > 0:
+            return self.solve_sudoku(i + 1, j, callback)
 
-        if self.mat[i][j] != 0:
-            return self.solve_sudoku(i, j + 1, callback)
-
-        for num in range(1, self.N + 1):
+        for num in range(1, 10):
             if self.checkIfSafe(i, j, num):
                 self.mat[i][j] = num
                 if callback:
                     callback(self.mat, i, j, True)
-                if self.solve_sudoku(i, j + 1, callback):
+                time.sleep(0.25)  # This is where the delay occurs
+
+                if self.solve_sudoku(i + 1, j, callback):
                     return True
 
                 # if no number can be placed, undo and try again
-                self.mat[i][j] = 0
                 if callback:
-                    callback(self.mat, i, j, False)
-                # Schedule the next invocation instead of sleeping
-                Clock.schedule_once(lambda dt: self.solve_sudoku(i, j, callback), 0.1)
+                    callback(self.mat, i, j, False)  # False indicates this is a backtrack move
+                self.mat[i][j] = 0
+                time.sleep(0.25)  # This is where the delay occurs
 
         return False
 
@@ -281,7 +281,7 @@ class SudokuPuzzle(Screen):
         self.sudoku_board[i][j].background_color = (0, 1, 0, 1) if is_correct else (1, 0, 0, 1)
 
         # Reset the color of the cell after a delay
-        Clock.schedule_once(lambda dt: self.reset_color(i, j), 0.5)
+        Clock.schedule_once(lambda dt: self.reset_color(i, j), 0.25)
 
     def reset_color(self, i, j):
         self.sudoku_board[i][j].background_color = (1, 1, 1, 1)
