@@ -6,8 +6,12 @@ from kivy.uix.label import Label
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.clock import Clock
-import random, math, threading, time
+import random, math, threading, time, json
+
 kivy.require('1.11.1')
+
+
+
 
 
 class Sudoku:
@@ -215,10 +219,13 @@ class MainMenu(Screen):
         self.manager.current = 'sudoku_puzzle'
 
     def load_puzzle_pressed(self, instance):
-        print('Load Puzzle button pressed')
+        self.manager.get_screen('sudoku_puzzle').load_puzzle_pressed()
+        self.manager.transition.direction = 'left'
+        self.manager.current = 'sudoku_puzzle'
 
     def help_pressed(self, instance):
-        print('Help button pressed')
+        self.manager.transition.direction = 'left'
+        self.manager.current = 'help_screen'
 
     def exit_pressed(self, instance):
         print('Exit button pressed')
@@ -289,9 +296,6 @@ class SudokuPuzzle(Screen):
     def solve_puzzle_pressed(self, instance):
         self.visualize_solve()
 
-    def save_puzzle_pressed(self, instance):
-        print('Save Puzzle button pressed')
-
     def back_pressed(self, instance):
         self.manager.transition.direction = 'right'
         self.manager.current = 'main_menu'
@@ -303,14 +307,106 @@ class SudokuPuzzle(Screen):
         else:
             print('Oops! Your solution is not correct. Keep trying.')
 
+    def save_puzzle_pressed(self, instance):
+        board = [[{'number': int(cell.text) if cell.text.isdigit() else 0, 'readonly': cell.readonly} for cell in row] for row in self.sudoku_board]
+        with open('sudoku_save.json', 'w') as f:
+            json.dump(board, f)
+        print('Game Saved!')
+
+    def load_puzzle_pressed(self):
+        with open('sudoku_save.json', 'r') as f:
+            loaded_board = json.load(f)
+        for i, row in enumerate(loaded_board):
+            for j, cell_data in enumerate(row):
+                self.sudoku_board[i][j].text = str(cell_data['number']) if cell_data['number'] != 0 else ''
+                self.sudoku_board[i][j].readonly = cell_data['readonly']
+        print('Game Loaded!')
+
+    def highlight_cells(self, cells, color):
+        for cell in cells:
+            cell.background_color = color
+
+    def find_conflicts(self, board):
+        conflicts = []
+        for i in range(9):
+            for j in range(9):
+                value = board[i][j]
+                if value == 0:  # cell is empty
+                    conflicts.append(self.sudoku_board[i][j])
+                else:
+                    # check the row
+                    for x in range(9):
+                        if board[i][x] == value and x != j:
+                            conflicts.append(self.sudoku_board[i][x])
+                            conflicts.append(self.sudoku_board[i][j])
+                    
+                    # check the column
+                    for y in range(9):
+                        if board[y][j] == value and y != i:
+                            conflicts.append(self.sudoku_board[y][j])
+                            conflicts.append(self.sudoku_board[i][j])
+
+                    # check the box
+                    box_start_row, box_start_col = i - i % 3, j - j % 3
+                    for x in range(3):
+                        for y in range(3):
+                            cur_x, cur_y = box_start_row + x, box_start_col + y
+                            if board[cur_x][cur_y] == value and (cur_x != i or cur_y != j):
+                                conflicts.append(self.sudoku_board[cur_x][cur_y])
+                                conflicts.append(self.sudoku_board[i][j])
+        return list(set(conflicts))  # remove duplicates
+
+    def reset_colors(self):
+        for row in self.sudoku_board:
+            for cell in row:
+                cell.background_color = (1, 1, 1, 1)
+
+    def check_solution_pressed(self, instance):
+        board = [[int(cell.text) if cell.text.isdigit() else 0 for cell in row] for row in self.sudoku_board]
+        if self.sudoku.is_correct_solution(board):
+            self.highlight_cells([cell for row in self.sudoku_board for cell in row], (0, 1, 0, 1))
+        else:
+            conflicts = self.find_conflicts(board)
+            self.highlight_cells(conflicts, (1, 0, 0, 1))
+        Clock.schedule_once(lambda dt: self.reset_colors(), 2)  # Reset colors after 2 seconds
+        
+
+class HelpScreen(Screen):
+    def __init__(self, **kwargs):
+        super(HelpScreen, self).__init__(**kwargs)
+        self.layout = GridLayout(cols=1)
+
+        # Add Help information
+        help_text = ("Welcome to PyDoKu!\n\n"
+                     "This is a simple Sudoku game where you can test your Sudoku skills.\n\n"
+                     "Here's how you play:\n\n"
+                     "- The objective is to fill a 9x9 grid so that each column, each row,\n"
+                     "  and each of the nine 3x3 boxes contains the digits from 1 to 9.\n"
+                     "- You can't repeat any digit within the same row, column, or 3x3 box.\n\n"
+                     "Good luck!")
+        self.layout.add_widget(Label(text=help_text))
+
+        # Back button
+        self.back = Button(text='Back')
+        self.back.bind(on_release=self.back_pressed)
+        self.layout.add_widget(self.back)
+
+        self.add_widget(self.layout)
+
+    def back_pressed(self, instance):
+        self.manager.transition.direction = 'right'
+        self.manager.current = 'main_menu'
+
 
 class PyDoKuApp(App):
     def build(self):
         sm = ScreenManager()
         sm.add_widget(MainMenu(name='main_menu'))
         sm.add_widget(SudokuPuzzle(name='sudoku_puzzle'))
+        sm.add_widget(HelpScreen(name='help_screen'))  # add this line
 
         return sm
+
 
 if __name__ == "__main__":
     PyDoKuApp().run()
